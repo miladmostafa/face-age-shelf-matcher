@@ -1,0 +1,10 @@
+node_modules/
+dist/
+public/vendor/
+.env
+.env.local
+.env.*.local
+.vite/
+coverage/
+*.log
+.DS_Store

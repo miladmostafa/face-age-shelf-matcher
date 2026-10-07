@@ -1,0 +1,38 @@
+{
+  "name": "skincare-shelf-matcher",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser extension that badges skincare products matching a Face Age scan.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "vendor": "node scripts/vendor-sdk.mjs",
+    "prebuild": "npm run vendor",
+    "build": "tsc --noEmit && vite build",
+    "predev": "npm run vendor",
+    "dev": "vite",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "check:widget": "node scripts/check-widget.mjs"
+  },
+  "dependencies": {
+    "chart.js": "4.4.6",
+    "face-age": "2.4.11",
+    "swiper": "11.2.10"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^3.0.0",
+    "@types/chrome": "^0.1.1",
+    "eslint": "^9.36.0",
+    "happy-dom": "^18.0.1",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.44.0",
+    "vite": "^6.3.6",
+    "vitest": "^3.2.4"
+  }
+}

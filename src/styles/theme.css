@@ -1,0 +1,139 @@
+:root {
+  --paper: #f3ecdf;
+  --paper-2: #fffaf4;
+  --ink: #221c17;
+  --muted: #6b5e53;
+  --line: #e3d5c4;
+  --seal: #8d3b31;
+  --seal-ink: #fff8f2;
+  --moss: #27584a;
+  --moss-soft: #e7f2ec;
+  --shadow: 0 16px 40px rgba(48, 32, 20, 0.08);
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --sans: "Avenir Next", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(141, 59, 49, 0.08), transparent 32%), var(--paper);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--serif);
+  font-weight: 560;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+button,
+.button,
+a.button {
+  font: 600 0.95rem/1 var(--sans);
+  border-radius: 999px;
+  padding: 0.72rem 1.05rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.primary {
+  background: var(--seal);
+  color: var(--seal-ink);
+}
+.quiet {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line);
+}
+.danger {
+  background: transparent;
+  color: var(--seal);
+  padding-left: 0;
+  padding-right: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--seal);
+  outline-offset: 3px;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--seal);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.muted {
+  color: var(--muted);
+}
+.notice {
+  background: var(--moss-soft);
+  color: var(--moss);
+  border: 1px solid #c9ddd4;
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+}
+
+label {
+  display: block;
+  font-weight: 650;
+  margin-bottom: 0.35rem;
+}
+
+input[type="text"],
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+  color: var(--ink);
+  border-radius: 12px;
+  padding: 0.75rem 0.85rem;
+  font: 500 1rem/1.4 var(--sans);
+}
+
+textarea {
+  min-height: 220px;
+  resize: vertical;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+.status {
+  min-height: 1.4em;
+  margin: 0.4rem 0 0;
+}
+.status[data-tone="ok"] {
+  color: var(--moss);
+}
+.status[data-tone="bad"] {
+  color: var(--seal);
+}

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Skincare Shelf Matcher</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <div class="pad">
+      <p class="eyebrow">Shelf matcher</p>
+      <h1>Your scan</h1>
+      <div id="summary" class="muted">Loading…</div>
+      <div class="row">
+        <button id="scan" class="primary" type="button">Open scanner</button>
+        <button id="options" class="quiet" type="button">Options</button>
+      </div>
+      <p class="fine muted">
+        Badges are keyword matches, not medical advice or a product endorsement.
+      </p>
+    </div>
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>

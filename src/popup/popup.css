@@ -1,0 +1,27 @@
+@import "../styles/theme.css";
+
+body {
+  width: 340px;
+  min-height: 220px;
+}
+.pad {
+  padding: 0.9rem 0.95rem 1rem;
+}
+h1 {
+  margin: 0.15rem 0 0.45rem;
+  font-size: 1.45rem;
+}
+#summary {
+  margin: 0 0 0.8rem;
+}
+#summary ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+.row {
+  margin-bottom: 0.7rem;
+}
+.fine {
+  margin: 0;
+  font-size: 0.82rem;
+}
