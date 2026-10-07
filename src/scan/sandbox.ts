@@ -73,7 +73,11 @@ function start(clientId: string): void {
   }
 
   const timer = window.setInterval(() => {
-    if (root.querySelector("iframe")) {
+    const mounted =
+      root.querySelector("iframe, .face_age") ||
+      document.getElementById("face-age-css") ||
+      document.getElementById("faceAge-module-body");
+    if (mounted) {
       window.clearInterval(timer);
       post({ type: "started" });
     }

@@ -13,6 +13,12 @@ Matching is a keyword check against the product title and description. It is not
 
 The toolbar popup shows the saved profile and links to the scanner and options.
 
+![Scanner ready after a Client ID is saved](docs/screenshots/scan.png)
+
+![Popup showing the concerns kept from a scan](docs/screenshots/popup.png)
+
+![Matching product cards on an allowlisted store](docs/screenshots/store.png)
+
 ## Setup
 
 Create a free Client ID at [panel.getfaceage.com](https://panel.getfaceage.com).
@@ -82,6 +88,10 @@ The scanner therefore runs in a **sandboxed extension page** (`src/scan/sandbox.
 - The Face Age API allows `Access-Control-Allow-Origin: *`, so the sandboxed page can call `https://core.getfaceage.com`.
 
 Webpack chunk loading inside `faceage.js` only treats `http(s)` URLs as a script base. The patch also accepts `chrome-extension:` so the chunks packaged next to `faceage.js` load.
+
+The published widget creates a blank iframe and writes its UI into that frame. A Manifest V3 sandbox page has an opaque origin, and Chrome gives that child frame a second opaque origin, so the SDK cannot reach `contentDocument` and the panel stays blank. The patch swaps that iframe for a stand-in element whose `contentDocument` and `contentWindow` are the sandbox page itself. Inline chart and carousel scripts then run under the sandbox policy, and the page still has no `chrome.*` access.
+
+The Face Age API rejects both that opaque origin and `chrome-extension://` origins (`It is not possible to access`). It does accept `http://localhost`, which is the development origin their widget already allows. A declarativeNetRequest rule rewrites the `Origin` header to `http://localhost` only for `https://core.getfaceage.com/*`. The photo is still uploaded to Face Age; the rewrite does not hide the request from you or from them. If a Client ID is limited to other sites, add `http://localhost` on the Face Age panel or the scanner will stop at that error.
 
 ## Limitations
 

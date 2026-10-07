@@ -2,6 +2,8 @@
  * Adjust the published face-age bundle so it can run in a Manifest V3 sandbox.
  * Chart.js and Swiper are loaded from the extension package. MediaPipe stays on
  * jsDelivr because the SDK fetches WASM with crossorigin from a null origin.
+ * The widget iframe would be a second opaque origin, so the SDK renders into this
+ * document through a stand-in element instead.
  */
 
 const REPLACEMENTS = [
@@ -15,6 +17,11 @@ const REPLACEMENTS = [
     "/vendor/swiper/swiper-bundle.min.css",
   ],
   ["!/^https?:/.test(e)", "!/^(https?:|chrome-extension:)/.test(e)"],
+  [
+    'i.dom.elIframe=document.createElement("iframe")',
+    'i.dom.elIframe=document.createElement("div"),Object.defineProperty(i.dom.elIframe,"contentDocument",{get:function(){return document}}),Object.defineProperty(i.dom.elIframe,"contentWindow",{get:function(){return window}})',
+  ],
+  ["position: relative; z-index: 1; opacity: 0;", "position: relative; z-index: 1; opacity: 1;"],
 ];
 
 const MEDIAPIPE_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.3/";

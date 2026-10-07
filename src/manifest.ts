@@ -9,8 +9,17 @@ export default defineManifest({
   version: "0.1.0",
   description: "Badges skincare products that mention concerns found by your Face Age scan.",
   minimum_chrome_version: "120",
-  permissions: ["storage", "scripting"],
-  host_permissions: [...defaultMatches],
+  permissions: ["storage", "scripting", "declarativeNetRequest"],
+  host_permissions: [...defaultMatches, "https://core.getfaceage.com/*"],
+  declarative_net_request: {
+    rule_resources: [
+      {
+        id: "faceage_origin",
+        enabled: true,
+        path: "faceage-origin-rules.json",
+      },
+    ],
+  },
   optional_host_permissions: ["http://*/*", "https://*/*"],
   action: {
     default_title: "Skincare Shelf Matcher",

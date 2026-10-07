@@ -106,6 +106,8 @@ await new Promise((resolve, reject) => {
 let nextId = 0;
 const pending = new Map();
 const sessions = new Map();
+const networkUrls = [];
+const consoleLines = [];
 cdp.addEventListener("message", (event) => {
   const message = JSON.parse(event.data);
   if (message.id && pending.has(message.id)) {
@@ -117,6 +119,18 @@ cdp.addEventListener("message", (event) => {
   }
   if (message.method === "Target.attachedToTarget") {
     sessions.set(message.params.sessionId, message.params.targetInfo);
+  }
+  if (message.method === "Network.requestWillBeSent") {
+    networkUrls.push(message.params.request?.url || "");
+  }
+  if (message.method === "Runtime.exceptionThrown") {
+    consoleLines.push(message.params.exceptionDetails?.exception?.description || "exception");
+  }
+  if (message.method === "Runtime.consoleAPICalled") {
+    const text = (message.params.args || [])
+      .map((arg) => arg.value || arg.description || "")
+      .join(" ");
+    if (text) consoleLines.push(text);
   }
 });
 
@@ -246,85 +260,57 @@ const statusText = await evaluate(
 console.log(`Scan status: ${state} — ${scrub(statusText, secret)}`);
 if (state === "error") fail(`Scanner error: ${statusText}`);
 
-await send("Page.enable", {}, scan.sessionId);
+let sandboxSessionId = "";
 
-async function listFrames(sessionId) {
-  const tree = await send("Page.getFrameTree", {}, sessionId);
-  const frames = [];
-  const walk = (node) => {
-    if (node?.frame) frames.push(node.frame);
-    for (const child of node?.childFrames || []) walk(child);
-  };
-  walk(tree.frameTree);
-  return frames;
+async function attachSandbox() {
+  if (sandboxSessionId) return sandboxSessionId;
+  const targets = await send("Target.getTargets");
+  const info = (targets.targetInfos || []).find(
+    (item) => item.type === "iframe" && String(item.url).includes("sandbox.html"),
+  );
+  if (!info) return "";
+  const attached = await send("Target.attachToTarget", {
+    targetId: info.targetId,
+    flatten: true,
+  });
+  sandboxSessionId = attached.sessionId;
+  await send("Network.enable", {}, sandboxSessionId);
+  await send("Runtime.enable", {}, sandboxSessionId);
+  return sandboxSessionId;
 }
 
-async function evalInFrame(sessionId, frameId, expression) {
-  const world = await send(
-    "Page.createIsolatedWorld",
-    { frameId, worldName: "shelf-check", grantUniveralAccess: true },
-    sessionId,
-  );
-  const result = await send(
-    "Runtime.evaluate",
-    {
-      expression,
-      awaitPromise: true,
-      returnByValue: true,
-      contextId: world.executionContextId,
-    },
-    sessionId,
-  );
-  if (result.exceptionDetails) {
-    const detail = result.exceptionDetails.exception?.description || result.exceptionDetails.text;
-    throw new Error(detail || "frame evaluate failed");
-  }
-  return result.result?.value;
-}
+const widgetProbe = `(() => ({
+  text: document.body ? document.body.innerText.slice(0, 1500) : "",
+  flags: {
+    css: Boolean(document.getElementById("face-age-css")),
+    loader: Boolean(document.querySelector(".face_age")),
+    started: Boolean(document.querySelector(".getStartedBtn")),
+  },
+  resources: performance.getEntriesByType("resource").map((entry) => entry.name),
+}))()`;
 
-const probe = `(() => {
-  const text = document.body ? document.body.innerText.slice(0, 2000) : "";
-  const frames = document.querySelectorAll("iframe").length;
-  const resources = performance.getEntriesByType("resource").map((entry) => entry.name);
-  return { text, frames, resources, href: location.href };
-})()`;
-
-let lastFrames = [];
 const widget = await waitFor(
   "widget UI",
   async () => {
-    const frames = await listFrames(scan.sessionId);
-    lastFrames = frames.map((frame) => frame.url);
-    const sandbox = frames.find((frame) => String(frame.url).includes("sandbox.html"));
-    if (!sandbox) return null;
-    const snapshots = [];
-    for (const frame of frames) {
-      if (frame.id === frames[0]?.id) continue;
-      try {
-        snapshots.push(await evalInFrame(scan.sessionId, frame.id, probe));
-      } catch (error) {
-        snapshots.push({
-          text: "",
-          frames: 0,
-          resources: [],
-          href: frame.url,
-          error: String(error),
-        });
-      }
+    const sessionId = await attachSandbox();
+    if (!sessionId) {
+      timeoutDetail = "Sandbox iframe target was not listed.";
+      return null;
     }
-    const text = snapshots.map((item) => item.text || item.error || "").join("\n");
-    const resources = snapshots.flatMap((item) => item.resources || []);
-    const iframeCount = snapshots.reduce((sum, item) => sum + (item.frames || 0), 0);
-    const interesting = `${text} ${resources.join(" ")}`.toLowerCase();
-    timeoutDetail = `Frames: ${lastFrames.join(" | ")}\nSample: ${text.replace(/\s+/g, " ").slice(0, 300)}`;
-    const initialized =
-      interesting.includes("authorize") ||
-      interesting.includes("get started") ||
-      interesting.includes("camera") ||
-      interesting.includes("upload");
-    if (iframeCount > 0 && initialized) {
-      return { text, frames: iframeCount, resources, urls: lastFrames };
+    const snapshot = await evaluate(sessionId, widgetProbe);
+    const text = snapshot?.text || "";
+    const resources = [...(snapshot?.resources || []), ...networkUrls];
+    const interesting = `${text}\n${resources.join("\n")}`.toLowerCase();
+    const preview = resources
+      .filter((name) => /authorize|faceage|face_mesh|chart|swiper|getfaceage/i.test(name))
+      .slice(0, 12);
+    timeoutDetail = `Flags: ${JSON.stringify(snapshot?.flags)}\nSample: ${text.replace(/\s+/g, " ").slice(0, 400)}\nResources: ${preview.join(" | ")}\nConsole: ${consoleLines.slice(0, 8).join(" | ")}`;
+    if (interesting.includes("not possible to access")) {
+      timeoutDetail = `Authorize was rejected.\n${timeoutDetail}`;
+      return null;
     }
+    const initialized = interesting.includes("get started") || snapshot?.flags?.started;
+    if (initialized) return { text, frames: 1, resources };
     return null;
   },
   30000,
@@ -334,12 +320,8 @@ console.log(`Widget iframes: ${widget.frames}`);
 console.log(`Widget text sample: ${scrub(widget.text, secret).replace(/\s+/g, " ").slice(0, 400)}`);
 console.log(`Widget resources: ${scrub(JSON.stringify(widget.resources), secret)}`);
 const interesting = `${widget.text} ${JSON.stringify(widget.resources)}`.toLowerCase();
-if (
-  !interesting.includes("authorize") &&
-  !interesting.includes("get started") &&
-  !interesting.includes("camera")
-) {
-  fail("The widget iframe mounted, but neither authorize nor the scanner UI was detected.");
+if (!interesting.includes("get started")) {
+  fail("The widget mounted, but the scanner start screen was not detected.");
 }
 
 await send("Page.enable", {}, scan.sessionId);
@@ -362,6 +344,20 @@ const badges = await waitFor("product badges", () =>
 );
 console.log(`Store fixture badges: ${badges}`);
 if (badges < 2) fail(`Expected 2 badges, found ${badges}.`);
+const panel = await evaluate(
+  store.sessionId,
+  `(() => {
+    const host = document.querySelector(".ssm-host");
+    const button = host && host.shadowRoot && host.shadowRoot.querySelector("button");
+    if (button) button.click();
+    const text = host && host.shadowRoot ? host.shadowRoot.textContent : "";
+    return text || "";
+  })()`,
+);
+if (!String(panel).includes("Dryness") && !String(panel).includes("hydrating")) {
+  fail(`Badge panel did not list the dryness match: ${panel}`);
+}
+console.log("Badge panel lists the matched concern.");
 await send("Page.enable", {}, store.sessionId);
 const storeShot = await send("Page.captureScreenshot", { format: "png" }, store.sessionId);
 writeFileSync(path.join(shots, "store.png"), Buffer.from(storeShot.data, "base64"));
