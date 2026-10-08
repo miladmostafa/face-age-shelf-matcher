@@ -109,7 +109,12 @@ const sessions = new Map();
 const networkUrls = [];
 const consoleLines = [];
 cdp.addEventListener("message", (event) => {
-  const message = JSON.parse(event.data);
+  let message;
+  try {
+    message = JSON.parse(event.data);
+  } catch {
+    return;
+  }
   if (message.id && pending.has(message.id)) {
     const { resolve, reject } = pending.get(message.id);
     pending.delete(message.id);
@@ -134,12 +139,25 @@ cdp.addEventListener("message", (event) => {
   }
 });
 
-function send(method, params = {}, sessionId) {
+function send(method, params = {}, sessionId, timeout = 20000) {
   const id = (nextId += 1);
   const payload = { id, method, params };
   if (sessionId) payload.sessionId = sessionId;
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject });
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(`CDP timed out: ${method}`));
+    }, timeout);
+    pending.set(id, {
+      resolve: (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      reject: (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    });
     cdp.send(JSON.stringify(payload));
   });
 }
@@ -168,11 +186,12 @@ function sessionFor(predicate) {
   return null;
 }
 
-async function evaluate(sessionId, expression) {
+async function evaluate(sessionId, expression, timeout = 20000) {
   const result = await send(
     "Runtime.evaluate",
     { expression, awaitPromise: true, returnByValue: true },
     sessionId,
+    timeout,
   );
   if (result.exceptionDetails) {
     throw new Error(result.exceptionDetails.text || "evaluate failed");
@@ -241,93 +260,6 @@ await evaluate(
   })})`,
 );
 
-const scan = await open(`chrome-extension://${extensionId}/src/scan/scan.html`);
-const state = await waitFor(
-  "scanner status",
-  async () => {
-    const value = await evaluate(
-      scan.sessionId,
-      "document.querySelector('#status')?.dataset.state || ''",
-    );
-    return value === "ready" || value === "error" || value === "saved" ? value : "";
-  },
-  30000,
-);
-const statusText = await evaluate(
-  scan.sessionId,
-  "document.querySelector('#status')?.textContent || ''",
-);
-console.log(`Scan status: ${state} — ${scrub(statusText, secret)}`);
-if (state === "error") fail(`Scanner error: ${statusText}`);
-
-let sandboxSessionId = "";
-
-async function attachSandbox() {
-  if (sandboxSessionId) return sandboxSessionId;
-  const targets = await send("Target.getTargets");
-  const info = (targets.targetInfos || []).find(
-    (item) => item.type === "iframe" && String(item.url).includes("sandbox.html"),
-  );
-  if (!info) return "";
-  const attached = await send("Target.attachToTarget", {
-    targetId: info.targetId,
-    flatten: true,
-  });
-  sandboxSessionId = attached.sessionId;
-  await send("Network.enable", {}, sandboxSessionId);
-  await send("Runtime.enable", {}, sandboxSessionId);
-  return sandboxSessionId;
-}
-
-const widgetProbe = `(() => ({
-  text: document.body ? document.body.innerText.slice(0, 1500) : "",
-  flags: {
-    css: Boolean(document.getElementById("face-age-css")),
-    loader: Boolean(document.querySelector(".face_age")),
-    started: Boolean(document.querySelector(".getStartedBtn")),
-  },
-  resources: performance.getEntriesByType("resource").map((entry) => entry.name),
-}))()`;
-
-const widget = await waitFor(
-  "widget UI",
-  async () => {
-    const sessionId = await attachSandbox();
-    if (!sessionId) {
-      timeoutDetail = "Sandbox iframe target was not listed.";
-      return null;
-    }
-    const snapshot = await evaluate(sessionId, widgetProbe);
-    const text = snapshot?.text || "";
-    const resources = [...(snapshot?.resources || []), ...networkUrls];
-    const interesting = `${text}\n${resources.join("\n")}`.toLowerCase();
-    const preview = resources
-      .filter((name) => /authorize|faceage|face_mesh|chart|swiper|getfaceage/i.test(name))
-      .slice(0, 12);
-    timeoutDetail = `Flags: ${JSON.stringify(snapshot?.flags)}\nSample: ${text.replace(/\s+/g, " ").slice(0, 400)}\nResources: ${preview.join(" | ")}\nConsole: ${consoleLines.slice(0, 8).join(" | ")}`;
-    if (interesting.includes("not possible to access")) {
-      timeoutDetail = `Authorize was rejected.\n${timeoutDetail}`;
-      return null;
-    }
-    const initialized = interesting.includes("get started") || snapshot?.flags?.started;
-    if (initialized) return { text, frames: 1, resources };
-    return null;
-  },
-  30000,
-);
-
-console.log(`Widget iframes: ${widget.frames}`);
-console.log(`Widget text sample: ${scrub(widget.text, secret).replace(/\s+/g, " ").slice(0, 400)}`);
-console.log(`Widget resources: ${scrub(JSON.stringify(widget.resources), secret)}`);
-const interesting = `${widget.text} ${JSON.stringify(widget.resources)}`.toLowerCase();
-if (!interesting.includes("get started")) {
-  fail("The widget mounted, but the scanner start screen was not detected.");
-}
-
-await send("Page.enable", {}, scan.sessionId);
-const scanShot = await send("Page.captureScreenshot", { format: "png" }, scan.sessionId);
-writeFileSync(path.join(shots, "scan.png"), Buffer.from(scanShot.data, "base64"));
-
 const popup = await open(`chrome-extension://${extensionId}/src/popup/popup.html`);
 await waitFor("popup summary", async () => {
   const text = await evaluate(popup.sessionId, "document.body.innerText");
@@ -360,7 +292,203 @@ if (!String(panel).includes("Dryness") && !String(panel).includes("hydrating")) 
 console.log("Badge panel lists the matched concern.");
 await send("Page.enable", {}, store.sessionId);
 const storeShot = await send("Page.captureScreenshot", { format: "png" }, store.sessionId);
-writeFileSync(path.join(shots, "store.png"), Buffer.from(storeShot.data, "base64"));
+writeFileSync(
+  path.join(tmpdir(), "shelf-fixture-store.png"),
+  Buffer.from(storeShot.data, "base64"),
+);
+
+const portraitResponse = await fetch(
+  "https://raw.githubusercontent.com/ageitgey/face_recognition/master/examples/obama.jpg",
+);
+if (!portraitResponse.ok) fail(`Portrait download failed: ${portraitResponse.status}`);
+const portraitB64 = Buffer.from(await portraitResponse.arrayBuffer()).toString("base64");
+
+const scan = await open(`chrome-extension://${extensionId}/src/scan/scan.html`);
+await send("Runtime.enable", {}, scan.sessionId);
+await send("Network.enable", {}, scan.sessionId);
+await send("Page.enable", {}, scan.sessionId);
+
+function cspProblem() {
+  return consoleLines.find((line) =>
+    /content security policy|refused to execute|unsafe-eval|refused to load the script/i.test(line),
+  );
+}
+
+const widgetProbe = `(() => ({
+  text: document.body ? document.body.innerText.slice(0, 4000) : "",
+  origin: location.origin,
+  iframes: document.querySelectorAll("iframe").length,
+  module: Boolean(document.querySelector("#FaceAge-module")),
+  flags: {
+    css: Boolean(document.getElementById("face-age-css")),
+    started: Boolean(document.querySelector(".getStartedBtn")),
+  },
+  resources: performance.getEntriesByType("resource").map((entry) => entry.name),
+}))()`;
+
+const widget = await waitFor(
+  "widget UI",
+  async () => {
+    const blocked = cspProblem();
+    if (blocked) fail(`Extension CSP blocked a script: ${blocked}`);
+    const snapshot = await evaluate(scan.sessionId, widgetProbe);
+    const text = snapshot?.text || "";
+    const resources = [...(snapshot?.resources || []), ...networkUrls];
+    const interesting = `${text}\n${resources.join("\n")}`.toLowerCase();
+    const preview = resources
+      .filter((name) => /authorize|faceage|face_mesh|chart|swiper|getfaceage|wasm/i.test(name))
+      .slice(0, 12);
+    timeoutDetail = `Origin: ${snapshot?.origin}\nIframes: ${snapshot?.iframes}\nFlags: ${JSON.stringify(snapshot?.flags)}\nSample: ${text.replace(/\s+/g, " ").slice(0, 400)}\nResources: ${preview.join(" | ")}\nConsole: ${consoleLines.slice(0, 8).join(" | ")}`;
+    if (interesting.includes("not possible to access")) {
+      timeoutDetail = `Authorize was rejected.\n${timeoutDetail}`;
+      return null;
+    }
+    if (snapshot?.iframes) {
+      timeoutDetail = `The scan page created an iframe.\n${timeoutDetail}`;
+      return null;
+    }
+    const initialized =
+      snapshot?.module && (interesting.includes("get started") || snapshot?.flags?.started);
+    if (initialized) return { text, resources, origin: snapshot.origin };
+    return null;
+  },
+  30000,
+);
+
+console.log(`Scan page origin: ${widget.origin}`);
+console.log(`Widget text sample: ${scrub(widget.text, secret).replace(/\s+/g, " ").slice(0, 400)}`);
+console.log(`Widget resources: ${scrub(JSON.stringify(widget.resources), secret)}`);
+if (!`${widget.text}`.toLowerCase().includes("get started")) {
+  fail("The widget mounted, but the scanner start screen was not detected.");
+}
+
+await evaluate(
+  scan.sessionId,
+  `(() => { document.querySelector(".check_box")?.click(); return true; })()`,
+);
+await waitFor("consent", async () => {
+  const name = await evaluate(
+    scan.sessionId,
+    `document.querySelector(".getStartedBtn")?.className || ""`,
+  );
+  return name && !String(name).includes("disable") ? name : "";
+});
+await evaluate(
+  scan.sessionId,
+  `(() => {
+    const devices = navigator.mediaDevices;
+    if (!devices) return "no-media";
+    devices.getUserMedia = async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 640;
+      canvas.height = 480;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#d9d3cc";
+      context.fillRect(0, 0, 640, 480);
+      const stream = canvas.captureStream(15);
+      for (const track of stream.getTracks()) {
+        track.getCapabilities = () => ({
+          width: { max: 640 },
+          height: { max: 480 },
+          frameRate: { max: 15 },
+        });
+        track.applyConstraints = async () => {};
+      }
+      return stream;
+    };
+    return "stubbed";
+  })()`,
+);
+await evaluate(scan.sessionId, `document.querySelector(".getStartedBtn")?.click()`);
+await waitFor(
+  "upload switch",
+  () => evaluate(scan.sessionId, `Boolean(document.querySelector(".FaceChangeMode"))`),
+  20000,
+);
+await evaluate(scan.sessionId, `document.querySelector(".FaceChangeMode").click()`);
+await waitFor(
+  "file input",
+  () => evaluate(scan.sessionId, `Boolean(document.querySelector("#upload_file_image"))`),
+  15000,
+);
+const uploaded = await evaluate(
+  scan.sessionId,
+  `(() => {
+    const input = document.querySelector("#upload_file_image");
+    if (!input) return "missing";
+    const binary = atob(${JSON.stringify(portraitB64)});
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    const file = new File([bytes], "portrait.jpg", { type: "image/jpeg" });
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    return "uploaded";
+  })()`,
+);
+if (uploaded !== "uploaded") fail(`Portrait upload did not start: ${uploaded}`);
+console.log("Portrait handed to the upload control.");
+
+const faceReady = await waitFor(
+  "face detection",
+  async () => {
+    const blocked = cspProblem();
+    if (blocked) fail(`Extension CSP blocked a script: ${blocked}`);
+    const state = await evaluate(
+      scan.sessionId,
+      `(() => {
+        const button = document.querySelector(".handle-submit");
+        return {
+          ready: Boolean(button && !button.classList.contains("disable")),
+          text: (document.body.innerText || "").replace(/\\s+/g, " ").slice(0, 300),
+        };
+      })()`,
+      45000,
+    );
+    timeoutDetail = `Face step: ${state?.text || ""}\nConsole: ${consoleLines.slice(-6).join(" | ")}`;
+    return state?.ready ? state : null;
+  },
+  60000,
+);
+if (!faceReady) fail("MediaPipe did not accept the portrait.");
+await evaluate(scan.sessionId, `document.querySelector(".handle-submit").click()`);
+console.log("Submitted the cropped portrait for analysis.");
+
+const analysis = await waitFor(
+  "analysis result",
+  async () => {
+    const blocked = cspProblem();
+    if (blocked) fail(`Extension CSP blocked a script: ${blocked}`);
+    const value = await evaluate(
+      scan.sessionId,
+      `(() => ({
+        state: document.querySelector("#status")?.dataset.state || "",
+        text: document.querySelector("#status")?.textContent || "",
+      }))()`,
+    );
+    timeoutDetail = `Status ${value?.state}: ${value?.text}\nConsole: ${consoleLines.slice(-6).join(" | ")}`;
+    if (value?.state === "error") fail(`Scanner error: ${value.text}`);
+    return value?.state === "saved" ? value : null;
+  },
+  90000,
+);
+console.log(`Scan status: saved — ${scrub(analysis.text, secret)}`);
+
+const profile = await evaluate(
+  scan.sessionId,
+  `chrome.storage.local.get("profile").then((stored) => stored.profile)`,
+);
+const problems = Array.isArray(profile?.problems) ? profile.problems : [];
+console.log(`Saved concern keys: ${problems.join(", ") || "(none above the threshold)"}`);
+if (!profile || profile.version !== 1 || profile.scannedAt === 1_700_000_000_000) {
+  fail("The scan did not replace the seeded profile.");
+}
+const iframes = await evaluate(scan.sessionId, `document.querySelectorAll("iframe").length`);
+if (iframes) fail(`Scan page created ${iframes} iframe(s).`);
+
+const scanShot = await send("Page.captureScreenshot", { format: "png" }, scan.sessionId);
+writeFileSync(path.join(shots, "scan.png"), Buffer.from(scanShot.data, "base64"));
 
 console.log("Widget check passed.");
 chrome.kill("SIGKILL");

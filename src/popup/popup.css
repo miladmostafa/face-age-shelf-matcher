@@ -11,6 +11,13 @@ h1 {
   margin: 0.15rem 0 0.45rem;
   font-size: 1.45rem;
 }
+h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+}
+#setup .fine a {
+  color: var(--seal);
+}
 #summary {
   margin: 0 0 0.8rem;
 }

@@ -51,13 +51,8 @@ export default defineManifest({
       run_at: "document_idle",
     },
   ],
-  sandbox: {
-    pages: ["src/scan/sandbox.html"],
-  },
   content_security_policy: {
-    extension_pages: "script-src 'self'; object-src 'self'",
-    sandbox:
-      "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; object-src 'self'; worker-src 'self' blob: https://cdn.jsdelivr.net",
+    extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
   },
   browser_specific_settings: {
     gecko: {

@@ -25,21 +25,18 @@
       <section class="stage" aria-label="Face scanner">
         <p id="status" data-state="loading">Loading scanner…</p>
         <div id="missing" hidden>
-          <h2>Add a Client ID first</h2>
+          <h2>Set your Client ID first</h2>
+          <p id="setup-copy"></p>
           <p>
-            The scanner needs a Face Age Client ID from
-            <a href="https://panel.getfaceage.com" target="_blank" rel="noreferrer"
-              >panel.getfaceage.com</a
-            >. It stays in this browser’s extension storage.
+            <a href="https://panel.getfaceage.com/" target="_blank" rel="noreferrer"
+              >Get a Client ID at panel.getfaceage.com</a
+            >
           </p>
-          <button id="open-options" class="primary" type="button">Open options</button>
+          <button id="open-options" class="primary" type="button">Open settings</button>
         </div>
-        <iframe
-          id="scanner"
-          title="Face Age scanner"
-          hidden
-          allow="camera *; microphone *; fullscreen *"
-        ></iframe>
+        <div id="FaceAge-module" hidden>
+          <div data-faceage-root></div>
+        </div>
       </section>
       <aside>
         <h2>Saved on this device</h2>
@@ -53,6 +50,7 @@
         </p>
       </aside>
     </main>
+    <script src="/vendor/faceage/faceage.js"></script>
     <script type="module" src="./scan.ts"></script>
   </body>
 </html>

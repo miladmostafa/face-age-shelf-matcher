@@ -1,4 +1,6 @@
 import { DEFAULT_ALLOWLIST } from "../lib/domains";
+import { shouldOpenOptionsOnInstall } from "../lib/onboarding";
+import { loadSettings } from "../lib/storage";
 import { syncExtraContentScripts } from "./register-scripts";
 
 async function seedAndSync(): Promise<void> {
@@ -9,8 +11,14 @@ async function seedAndSync(): Promise<void> {
   await syncExtraContentScripts();
 }
 
-chrome.runtime.onInstalled.addListener(() => {
-  void seedAndSync();
+chrome.runtime.onInstalled.addListener((details) => {
+  void (async () => {
+    await seedAndSync();
+    const settings = await loadSettings();
+    if (shouldOpenOptionsOnInstall(details.reason, settings.clientId)) {
+      await chrome.runtime.openOptionsPage();
+    }
+  })();
 });
 
 chrome.runtime.onStartup.addListener(() => {

@@ -2,7 +2,18 @@
   "name": "skincare-shelf-matcher",
   "version": "0.1.0",
   "private": true,
-  "description": "Browser extension that badges skincare products matching a Face Age scan.",
+  "description": "Chrome and Firefox skincare extension: one Face Age skin analysis, then product-match badges on beauty stores.",
+  "keywords": [
+    "skincare",
+    "browser-extension",
+    "chrome-extension",
+    "firefox-extension",
+    "skin-analysis",
+    "skin-age",
+    "face-age",
+    "product-matcher",
+    "manifest-v3"
+  ],
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -20,6 +31,7 @@
     "check:widget": "node scripts/check-widget.mjs"
   },
   "dependencies": {
+    "@mediapipe/face_mesh": "0.3.1620248508",
     "chart.js": "4.4.6",
     "face-age": "2.4.11",
     "swiper": "11.2.10"

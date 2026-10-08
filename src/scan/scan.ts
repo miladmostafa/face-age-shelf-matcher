@@ -1,12 +1,17 @@
 import { DICTIONARY } from "../lib/dictionary";
-import { isSandboxMessage, PARENT_SOURCE, type SandboxToParent } from "../lib/messages";
-import { sanitizeProfile, type ScanProfile } from "../lib/profile";
+import { SETUP_MESSAGE, needsClientId } from "../lib/onboarding";
+import { PROBLEM_KEYS } from "../lib/problems";
+import { buildProfile, sanitizeProfile, type ScanProfile } from "../lib/profile";
 import { loadSettings, saveProfile } from "../lib/storage";
 
 const statusEl = document.querySelector<HTMLElement>("#status");
 const missingEl = document.querySelector<HTMLElement>("#missing");
-const frame = document.querySelector<HTMLIFrameElement>("#scanner");
+const setupCopy = document.querySelector<HTMLElement>("#setup-copy");
+const moduleEl = document.querySelector<HTMLElement>("#FaceAge-module");
 const profileEl = document.querySelector<HTMLElement>("#profile");
+
+let selections: Record<string, unknown> | null = null;
+let widgetStarted = false;
 
 function setStatus(state: string, text: string): void {
   if (!statusEl) return;
@@ -57,82 +62,128 @@ function openOptions(event?: Event): void {
 document.querySelector("#options-link")?.addEventListener("click", openOptions);
 document.querySelector("#open-options")?.addEventListener("click", openOptions);
 
-async function reloadScanner(clientId: string): Promise<void> {
-  if (!frame || !missingEl) return;
-  missingEl.hidden = true;
-  frame.hidden = false;
+function watchUntilMounted(): void {
+  const timer = window.setInterval(() => {
+    const mounted =
+      moduleEl?.querySelector(".face_age, .getStartedBtn") ||
+      document.getElementById("face-age-css") ||
+      document.getElementById("faceAge-module-body");
+    if (!mounted) return;
+    window.clearInterval(timer);
+    setStatus("ready", "Scanner is ready. Use the camera or upload a photo inside the panel.");
+  }, 100);
+  window.setTimeout(() => window.clearInterval(timer), 15000);
+}
+
+async function storeAnalysis(data: {
+  analysis?: unknown;
+  activeSelections?: Record<string, unknown> | null;
+}): Promise<void> {
+  const profile = buildProfile({
+    analysis: data.analysis,
+    activeSelections: data.activeSelections ?? selections,
+  });
+  if (!profile) {
+    setStatus("error", "The scan finished without a readable concern list.");
+    return;
+  }
+  await saveProfile(profile);
+  renderProfile(profile);
+  const count = profile.problems.length;
+  setStatus(
+    "saved",
+    count
+      ? `Scan saved. ${count} concern${count === 1 ? "" : "s"} will be used on supported stores.`
+      : "Scan saved. Nothing scored high enough to badge products.",
+  );
+}
+
+function start(clientId: string): void {
+  if (widgetStarted) return;
+  const FaceAge = window.FaceAge;
+  if (!FaceAge || !moduleEl) {
+    setStatus("error", "The Face Age SDK did not load.");
+    return;
+  }
+  widgetStarted = true;
+  if (missingEl) missingEl.hidden = true;
+  moduleEl.hidden = false;
   setStatus("starting", "Starting the Face Age scanner…");
-  frame.src = "sandbox.html";
-  const send = () => {
-    frame.contentWindow?.postMessage({ source: PARENT_SOURCE, type: "config", clientId }, "*");
-  };
-  frame.addEventListener("load", send, { once: true });
+  try {
+    const widget = new FaceAge({
+      elementId: "FaceAge-module",
+      faceageId: clientId,
+      displayModel: "section",
+      language: "en",
+      height: "760px",
+      quiz: false,
+      history: false,
+      showProducts: false,
+      showRoutine: false,
+      showCamera: true,
+      showUpload: true,
+      problems: [...PROBLEM_KEYS],
+      gtag: null,
+      gtagInsert: false,
+      fbPixel: null,
+      fbPixelInsert: false,
+    });
+    void widget.render();
+    void widget.API.getActiveSelections((data) => {
+      selections = data;
+    });
+    void widget.API.getAdvisorData((data) => {
+      void storeAnalysis(data);
+    });
+    void widget.onResetData(() => {
+      setStatus(
+        "ready",
+        "The widget was reset. Your saved profile stays until a new scan finishes.",
+      );
+    });
+  } catch (error) {
+    widgetStarted = false;
+    const message = error instanceof Error ? error.message : "The scanner could not start.";
+    setStatus("error", message);
+    return;
+  }
+  watchUntilMounted();
 }
 
 async function boot(): Promise<void> {
   const settings = await loadSettings();
   renderProfile(settings.profile);
-  if (!settings.clientId) {
-    setStatus("needs-client-id", "A Client ID is required before the camera can open.");
-    if (missingEl) missingEl.hidden = false;
-    if (frame) frame.hidden = true;
+  if (needsClientId(settings.clientId)) {
+    showMissingClientId();
     return;
   }
-  await reloadScanner(settings.clientId);
+  start(settings.clientId);
+}
+
+function showMissingClientId(): void {
+  setStatus("needs-client-id", "Add a Face Age Client ID in the extension settings before scanning.");
+  if (setupCopy) setupCopy.textContent = SETUP_MESSAGE;
+  if (missingEl) missingEl.hidden = false;
+  if (moduleEl) moduleEl.hidden = true;
 }
 
 document.querySelector("#rescan")?.addEventListener("click", () => {
-  void boot();
+  location.reload();
 });
-
-window.addEventListener("message", (event) => {
-  if (event.source !== frame?.contentWindow) return;
-  if (!isSandboxMessage(event.data)) return;
-  void onSandbox(event.data);
-});
-
-async function onSandbox(message: SandboxToParent): Promise<void> {
-  if (message.type === "ready") {
-    const settings = await loadSettings();
-    if (!settings.clientId || !frame?.contentWindow) return;
-    frame.contentWindow.postMessage(
-      { source: PARENT_SOURCE, type: "config", clientId: settings.clientId },
-      "*",
-    );
-    return;
-  }
-  if (message.type === "started") {
-    setStatus("ready", "Scanner is ready. Use the camera or upload a photo inside the panel.");
-    return;
-  }
-  if (message.type === "reset") {
-    setStatus("ready", "The widget was reset. Your saved profile stays until a new scan finishes.");
-    return;
-  }
-  if (message.type === "error") {
-    setStatus("error", message.message);
-    return;
-  }
-  if (message.type === "profile") {
-    const profile = sanitizeProfile(message.profile);
-    if (!profile) {
-      setStatus("error", "The scan result could not be stored.");
-      return;
-    }
-    await saveProfile(profile);
-    renderProfile(profile);
-    const count = profile.problems.length;
-    setStatus(
-      "saved",
-      count
-        ? `Scan saved. ${count} concern${count === 1 ? "" : "s"} will be used on supported stores.`
-        : "Scan saved. Nothing scored high enough to badge products.",
-    );
-  }
-}
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== "local" || !changes.profile) return;
+  if (area !== "local") return;
+  if (changes.clientId) {
+    const nextId = typeof changes.clientId.newValue === "string" ? changes.clientId.newValue : "";
+    if (needsClientId(nextId)) {
+      widgetStarted = false;
+      showMissingClientId();
+    } else if (!widgetStarted) {
+      if (missingEl) missingEl.hidden = true;
+      start(nextId);
+    }
+  }
+  if (!changes.profile) return;
   if (changes.profile.newValue == null) {
     renderProfile(null);
     return;

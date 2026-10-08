@@ -1,16 +1,23 @@
 import { DICTIONARY } from "../lib/dictionary";
+import { SETUP_MESSAGE, needsClientId } from "../lib/onboarding";
 import { loadSettings } from "../lib/storage";
 
 const summary = document.querySelector<HTMLElement>("#summary");
+const setup = document.querySelector<HTMLElement>("#setup");
+const setupCopy = document.querySelector<HTMLElement>("#setup-copy");
+const ready = document.querySelector<HTMLElement>("#ready");
 
 function render(): void {
   void loadSettings().then((settings) => {
-    if (!summary) return;
-    summary.replaceChildren();
-    if (!settings.clientId) {
-      summary.textContent = "Add a Face Age Client ID in Options before scanning.";
+    const missing = needsClientId(settings.clientId);
+    if (setup) setup.hidden = !missing;
+    if (ready) ready.hidden = missing;
+    if (missing) {
+      if (setupCopy) setupCopy.textContent = SETUP_MESSAGE;
       return;
     }
+    if (!summary) return;
+    summary.replaceChildren();
     if (!settings.profile) {
       summary.textContent = "No scan saved yet. Open the scanner to use your camera or a photo.";
       return;
@@ -48,6 +55,10 @@ document.querySelector("#scan")?.addEventListener("click", () => {
 });
 
 document.querySelector("#options")?.addEventListener("click", () => {
+  void chrome.runtime.openOptionsPage();
+});
+
+document.querySelector("#open-settings")?.addEventListener("click", () => {
   void chrome.runtime.openOptionsPage();
 });
 

@@ -10,11 +10,25 @@
     <div class="pad">
       <p class="eyebrow">Shelf matcher</p>
       <h1>Your scan</h1>
-      <div id="summary" class="muted">Loading…</div>
-      <div class="row">
-        <button id="scan" class="primary" type="button">Open scanner</button>
-        <button id="options" class="quiet" type="button">Options</button>
-      </div>
+      <section id="setup" hidden>
+        <h2>Set your Client ID first</h2>
+        <p id="setup-copy" class="muted"></p>
+        <p class="fine">
+          <a href="https://panel.getfaceage.com/" target="_blank" rel="noreferrer"
+            >Get a Client ID at panel.getfaceage.com</a
+          >
+        </p>
+        <div class="row">
+          <button id="open-settings" class="primary" type="button">Open settings</button>
+        </div>
+      </section>
+      <section id="ready">
+        <div id="summary" class="muted">Loading…</div>
+        <div class="row">
+          <button id="scan" class="primary" type="button">Open scanner</button>
+          <button id="options" class="quiet" type="button">Options</button>
+        </div>
+      </section>
       <p class="fine muted">
         Badges are keyword matches, not medical advice or a product endorsement.
       </p>

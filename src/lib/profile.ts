@@ -129,7 +129,7 @@ export function buildProfile(
   };
 }
 
-/** Rebuild a profile from storage or a sandbox message, dropping anything else. */
+/** Rebuild a profile from storage, dropping anything that is not a concern key. */
 export function sanitizeProfile(value: unknown, now = Date.now()): ScanProfile | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;

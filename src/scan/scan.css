@@ -69,12 +69,15 @@ aside {
   padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--line);
 }
-iframe {
-  width: 100%;
-  height: 820px;
-  border: 0;
+#FaceAge-module {
+  min-height: 760px;
   background: white;
-  display: block;
+}
+#FaceAge-module[hidden] {
+  display: none;
+}
+[data-faceage-root] {
+  min-height: 720px;
 }
 #missing {
   padding: 1.5rem 1.2rem 2rem;
@@ -106,7 +109,8 @@ aside h2 {
   main {
     grid-template-columns: 1fr;
   }
-  iframe {
-    height: 720px;
+  #FaceAge-module,
+  [data-faceage-root] {
+    min-height: 640px;
   }
 }
