@@ -2,8 +2,8 @@
  * Adjust the published face-age bundle so it can run on a normal MV3 extension
  * page: local scripts only, no inline scripts, and no eval.
  * Chart.js, Swiper, and MediaPipe Face Mesh are loaded from the extension
- * package. The widget's internal iframe is replaced with the scan page's
- * #FaceAge-module root so the UI is not a nested frame.
+ * package. The widget keeps its own about:blank iframe (#FaceAge-module-iframe)
+ * and writes the scanner UI into that frame.
  */
 
 const MEDIAPIPE_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.3/";
@@ -17,6 +17,10 @@ const SWIPER_OPTIONS =
   '{slidesPerView:"auto",spaceBetween:6,cssMode:!0,mousewheel:{forceToAxis:!0,releaseOnEdges:!0},simulateTouch:!1}';
 const SWIPER_OPTIONS_WIDE =
   '{slidesPerView:"auto",spaceBetween:12,cssMode:!0,mousewheel:{forceToAxis:!0,releaseOnEdges:!0},simulateTouch:!1,navigation:{nextEl:".swiper-button-next",prevEl:".swiper-button-prev"}}';
+
+function swiperInFrame(globals, selector, options) {
+  return `(function(){var frame=${globals}.dom&&${globals}.dom.elIframe;var view=frame&&frame.contentWindow||window;var doc=frame&&frame.contentDocument||document;var el=doc.querySelector(${selector});if(el&&typeof view.Swiper==="function")new view.Swiper(el,${options})}).call(this)`;
+}
 
 const TEXT_REPLACEMENTS = [
   ["https://cdn.jsdelivr.net/npm/chart.js", "/vendor/chart/chart.umd.js"],
@@ -35,22 +39,18 @@ const TEXT_REPLACEMENTS = [
     't.setAttribute("src",e),t.setAttribute("crossorigin","anonymous"),document.body.appendChild(t)',
     't.setAttribute("src",e),document.body.appendChild(t)',
   ],
-  [
-    'i.dom.elIframe=document.createElement("iframe")',
-    'i.dom.elIframe=(document.querySelector("#FaceAge-module [data-faceage-root]")||document.createElement("div")),Object.defineProperty(i.dom.elIframe,"contentWindow",{get:function(){return window}}),Object.defineProperty(i.dom.elIframe,"contentDocument",{get:function(){var el=i.dom.elIframe;if(!el._shelfDoc){el._shelfDoc=new Proxy(document,{get:function(target,prop){if(prop==="body")return el;var value=Reflect.get(target,prop,target);return typeof value==="function"?value.bind(target):value}})}return el._shelfDoc}})',
-  ],
   ["position: relative; z-index: 1; opacity: 0;", "position: relative; z-index: 1; opacity: 1;"],
   [
     'var f=document.createElement("script");f.type="text/javascript",f.text="new Swiper(\'.myProductProblem\', {\\n            slidesPerView: \'auto\',\\n            spaceBetween: 6,\\n"+_k+"        });",n.dom.elRoutines.routine.appendChild(f)',
-    `typeof Swiper=="function"&&new Swiper(".myProductProblem",${SWIPER_OPTIONS})`,
+    swiperInFrame("n", '".myProductProblem"', SWIPER_OPTIONS),
   ],
   [
     'var r=document.createElement("script");r.type="text/javascript",r.text="new Swiper(\'.myProductProblem\', {\\n            slidesPerView: \'auto\',\\n            spaceBetween: 6,\\n"+_k+"        });",n.dom.elRecommendation.products.appendChild(r)',
-    `typeof Swiper=="function"&&new Swiper(".myProductProblem",${SWIPER_OPTIONS})`,
+    swiperInFrame("n", '".myProductProblem"', SWIPER_OPTIONS),
   ],
   [
     'var l=document.createElement("script");l.type="text/javascript",l.text="new Swiper(\'."+(this.recommendation?"myProducts":"mySwiper")+"\', {\\n            slidesPerView: \'auto\',\\n            spaceBetween: 12,\\n"+_k+\'            navigation: {\\n               nextEl: ".swiper-button-next",\\n               prevEl: ".swiper-button-prev",\\n            },\\n        });\',t.appendChild(l)',
-    `typeof Swiper=="function"&&new Swiper("."+(this.recommendation?"myProducts":"mySwiper"),${SWIPER_OPTIONS_WIDE})`,
+    swiperInFrame("n", '"."+(this.recommendation?"myProducts":"mySwiper")', SWIPER_OPTIONS_WIDE),
   ],
 ];
 
@@ -58,7 +58,7 @@ const CREATE_NAMED_FUNCTION =
   'function createNamedFunction(name,body){name=makeLegalFunctionName(name);return new Function("body","return function "+name+"() {\\n"+\'    "use strict";\'+"    return body.apply(this, arguments);\\n"+"};\\n")(body)}';
 
 const CHART_DIRECT =
-  '(function(){var ctx=document.getElementById(u);if(ctx&&typeof Chart==="function"){var border=(null!==(_=null===(A=r.customTemplate)||void 0===A?void 0:A.base_color)&&void 0!==_?_:"rgba(239, 55, 134)");new Chart(ctx.getContext("2d"),{type:"radar",height:450,data:{labels:P,datasets:[{data:C,backgroundColor:"rgba(239, 55, 134, 0)",borderColor:border,borderWidth:1}]},options:{responsive:!0,plugins:{legend:{display:!1},tooltip:{enabled:!0}},scales:{r:{reverse:!0,min:0,max:100,ticks:{beginAtZero:!0,stepSize:20,display:!1,callback:function(value){return value}},pointLabels:{font:{size:10}}}},elements:{line:{tension:0.2}}}})}})()';
+  '(function(){var frame=r.dom&&r.dom.elIframe;var doc=frame&&frame.contentDocument||document;var view=frame&&frame.contentWindow||window;var ctx=doc.getElementById(u);if(ctx&&typeof view.Chart==="function"){var border=(null!==(_=null===(A=r.customTemplate)||void 0===A?void 0:A.base_color)&&void 0!==_?_:"rgba(239, 55, 134)");new view.Chart(ctx.getContext("2d"),{type:"radar",height:450,data:{labels:P,datasets:[{data:C,backgroundColor:"rgba(239, 55, 134, 0)",borderColor:border,borderWidth:1}]},options:{responsive:!0,plugins:{legend:{display:!1},tooltip:{enabled:!0}},scales:{r:{reverse:!0,min:0,max:100,ticks:{beginAtZero:!0,stepSize:20,display:!1,callback:function(value){return value}},pointLabels:{font:{size:10}}}},elements:{line:{tension:0.2}}}})}})()';
 
 function replaceChartInline(source) {
   const start = source.indexOf(CHART_START);
@@ -90,8 +90,11 @@ export function patchFaceAgeBundle(source) {
   if (next.includes('setAttribute("crossorigin","anonymous")')) {
     throw new Error("crossorigin script loading is still in the face-age bundle.");
   }
-  if (next.includes('i.dom.elIframe=document.createElement("iframe")')) {
-    throw new Error("The widget still creates an iframe.");
+  if (
+    source.includes('i.dom.elIframe=document.createElement("iframe")') &&
+    !next.includes('i.dom.elIframe=document.createElement("iframe")')
+  ) {
+    throw new Error("The widget iframe was removed.");
   }
   if (next.includes('.text="new Swiper') || next.includes(CHART_START)) {
     throw new Error("An inline Chart or Swiper script is still in the bundle.");

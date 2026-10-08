@@ -42,14 +42,19 @@ const server = createServer((_req, res) => {
 await new Promise((resolve) => server.listen(storePort, "127.0.0.1", resolve));
 
 const profileDir = mkdtempSync(path.join(tmpdir(), "shelf-chrome-"));
+// Software WebGL: MediaPipe's face graph waits on a GL sync, and --disable-gpu never completes it.
 const chrome = spawn(
   chromePath,
   [
     "--no-first-run",
     "--no-default-browser-check",
-    "--disable-gpu",
     "--no-sandbox",
     "--disable-dev-shm-usage",
+    "--ignore-gpu-blocklist",
+    "--enable-webgl",
+    "--enable-unsafe-swiftshader",
+    "--use-gl=angle",
+    "--use-angle=swiftshader",
     `--user-data-dir=${profileDir}`,
     `--remote-debugging-port=${port}`,
     `--load-extension=${dist}`,
@@ -314,17 +319,25 @@ function cspProblem() {
   );
 }
 
-const widgetProbe = `(() => ({
-  text: document.body ? document.body.innerText.slice(0, 4000) : "",
-  origin: location.origin,
-  iframes: document.querySelectorAll("iframe").length,
-  module: Boolean(document.querySelector("#FaceAge-module")),
-  flags: {
-    css: Boolean(document.getElementById("face-age-css")),
-    started: Boolean(document.querySelector(".getStartedBtn")),
-  },
-  resources: performance.getEntriesByType("resource").map((entry) => entry.name),
-}))()`;
+const widgetProbe = `(() => {
+  const frame = document.querySelector("#FaceAge-module-iframe");
+  const doc = frame && frame.contentDocument;
+  return {
+    text: doc && doc.body ? doc.body.innerText.slice(0, 4000) : "",
+    origin: location.origin,
+    iframes: document.querySelectorAll("iframe").length,
+    frameId: frame ? frame.id : "",
+    frameSrc: frame ? frame.getAttribute("src") : null,
+    frameHref: frame && frame.contentWindow ? frame.contentWindow.location.href : "",
+    module: Boolean(document.querySelector("#FaceAge-module")),
+    flags: {
+      css: Boolean(doc && doc.getElementById("face-age-css")),
+      started: Boolean(doc && doc.querySelector(".getStartedBtn")),
+      body: Boolean(doc && doc.getElementById("faceAge-module-body")),
+    },
+    resources: performance.getEntriesByType("resource").map((entry) => entry.name),
+  };
+})()`;
 
 const widget = await waitFor(
   "widget UI",
@@ -338,13 +351,13 @@ const widget = await waitFor(
     const preview = resources
       .filter((name) => /authorize|faceage|face_mesh|chart|swiper|getfaceage|wasm/i.test(name))
       .slice(0, 12);
-    timeoutDetail = `Origin: ${snapshot?.origin}\nIframes: ${snapshot?.iframes}\nFlags: ${JSON.stringify(snapshot?.flags)}\nSample: ${text.replace(/\s+/g, " ").slice(0, 400)}\nResources: ${preview.join(" | ")}\nConsole: ${consoleLines.slice(0, 8).join(" | ")}`;
+    timeoutDetail = `Origin: ${snapshot?.origin}\nIframe: ${snapshot?.frameId || "(missing)"} src=${snapshot?.frameSrc} href=${snapshot?.frameHref}\nFlags: ${JSON.stringify(snapshot?.flags)}\nSample: ${text.replace(/\s+/g, " ").slice(0, 400)}\nResources: ${preview.join(" | ")}\nConsole: ${consoleLines.slice(0, 8).join(" | ")}`;
     if (interesting.includes("not possible to access")) {
       timeoutDetail = `Authorize was rejected.\n${timeoutDetail}`;
       return null;
     }
-    if (snapshot?.iframes) {
-      timeoutDetail = `The scan page created an iframe.\n${timeoutDetail}`;
+    if (snapshot?.iframes && snapshot.frameId !== "FaceAge-module-iframe") {
+      timeoutDetail = `Unexpected iframe.\n${timeoutDetail}`;
       return null;
     }
     const initialized =
@@ -364,21 +377,23 @@ if (!`${widget.text}`.toLowerCase().includes("get started")) {
 
 await evaluate(
   scan.sessionId,
-  `(() => { document.querySelector(".check_box")?.click(); return true; })()`,
+  `(() => {
+    const doc = document.querySelector("#FaceAge-module-iframe")?.contentDocument;
+    doc?.querySelector(".check_box")?.click();
+    return true;
+  })()`,
 );
 await waitFor("consent", async () => {
   const name = await evaluate(
     scan.sessionId,
-    `document.querySelector(".getStartedBtn")?.className || ""`,
+    `document.querySelector("#FaceAge-module-iframe")?.contentDocument?.querySelector(".getStartedBtn")?.className || ""`,
   );
   return name && !String(name).includes("disable") ? name : "";
 });
 await evaluate(
   scan.sessionId,
   `(() => {
-    const devices = navigator.mediaDevices;
-    if (!devices) return "no-media";
-    devices.getUserMedia = async () => {
+    const stub = async () => {
       const canvas = document.createElement("canvas");
       canvas.width = 640;
       canvas.height = 480;
@@ -393,28 +408,46 @@ await evaluate(
           frameRate: { max: 15 },
         });
         track.applyConstraints = async () => {};
+        track.stop = () => {};
       }
       return stream;
     };
-    return "stubbed";
+    const view = document.querySelector("#FaceAge-module-iframe")?.contentWindow;
+    if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = stub;
+    if (view?.navigator.mediaDevices) view.navigator.mediaDevices.getUserMedia = stub;
+    return navigator.mediaDevices ? "stubbed" : "no-media";
   })()`,
 );
-await evaluate(scan.sessionId, `document.querySelector(".getStartedBtn")?.click()`);
+await evaluate(
+  scan.sessionId,
+  `document.querySelector("#FaceAge-module-iframe")?.contentDocument?.querySelector(".getStartedBtn")?.click()`,
+);
 await waitFor(
   "upload switch",
-  () => evaluate(scan.sessionId, `Boolean(document.querySelector(".FaceChangeMode"))`),
+  () =>
+    evaluate(
+      scan.sessionId,
+      `Boolean(document.querySelector("#FaceAge-module-iframe")?.contentDocument?.querySelector(".FaceChangeMode"))`,
+    ),
   20000,
 );
-await evaluate(scan.sessionId, `document.querySelector(".FaceChangeMode").click()`);
+await evaluate(
+  scan.sessionId,
+  `document.querySelector("#FaceAge-module-iframe")?.contentDocument?.querySelector(".FaceChangeMode")?.click()`,
+);
 await waitFor(
   "file input",
-  () => evaluate(scan.sessionId, `Boolean(document.querySelector("#upload_file_image"))`),
+  () =>
+    evaluate(
+      scan.sessionId,
+      `Boolean(document.querySelector("#FaceAge-module-iframe")?.contentDocument?.querySelector("#upload_file_image"))`,
+    ),
   15000,
 );
 const uploaded = await evaluate(
   scan.sessionId,
   `(() => {
-    const input = document.querySelector("#upload_file_image");
+    const input = document.querySelector("#FaceAge-module-iframe")?.contentDocument?.querySelector("#upload_file_image");
     if (!input) return "missing";
     const binary = atob(${JSON.stringify(portraitB64)});
     const bytes = new Uint8Array(binary.length);
@@ -438,10 +471,11 @@ const faceReady = await waitFor(
     const state = await evaluate(
       scan.sessionId,
       `(() => {
-        const button = document.querySelector(".handle-submit");
+        const doc = document.querySelector("#FaceAge-module-iframe")?.contentDocument;
+        const button = doc?.querySelector(".handle-submit");
         return {
           ready: Boolean(button && !button.classList.contains("disable")),
-          text: (document.body.innerText || "").replace(/\\s+/g, " ").slice(0, 300),
+          text: (doc?.body?.innerText || "").replace(/\\s+/g, " ").slice(0, 300),
         };
       })()`,
       45000,
@@ -452,7 +486,19 @@ const faceReady = await waitFor(
   60000,
 );
 if (!faceReady) fail("MediaPipe did not accept the portrait.");
-await evaluate(scan.sessionId, `document.querySelector(".handle-submit").click()`);
+const submitted = await evaluate(
+  scan.sessionId,
+  `(() => {
+    const doc = document.querySelector("#FaceAge-module-iframe")?.contentDocument;
+    const button = [...(doc?.querySelectorAll(".handle-submit") || [])].find(
+      (node) => !node.classList.contains("disable"),
+    );
+    if (!button) return "missing";
+    button.click();
+    return "clicked";
+  })()`,
+);
+if (submitted !== "clicked") fail(`Could not submit the portrait: ${submitted}`);
 console.log("Submitted the cropped portrait for analysis.");
 
 const analysis = await waitFor(
@@ -484,8 +530,19 @@ console.log(`Saved concern keys: ${problems.join(", ") || "(none above the thres
 if (!profile || profile.version !== 1 || profile.scannedAt === 1_700_000_000_000) {
   fail("The scan did not replace the seeded profile.");
 }
-const iframes = await evaluate(scan.sessionId, `document.querySelectorAll("iframe").length`);
-if (iframes) fail(`Scan page created ${iframes} iframe(s).`);
+const frame = await evaluate(
+  scan.sessionId,
+  `(() => {
+    const node = document.querySelector("#FaceAge-module-iframe");
+    return node
+      ? { id: node.id, src: node.getAttribute("src"), href: node.contentWindow?.location?.href || "" }
+      : null;
+  })()`,
+);
+if (!frame || frame.id !== "FaceAge-module-iframe") {
+  fail("The Face Age iframe was missing at the end of the scan.");
+}
+console.log(`Widget iframe ${frame.id} href=${frame.href || "(about:blank)"}`);
 
 const scanShot = await send("Page.captureScreenshot", { format: "png" }, scan.sessionId);
 writeFileSync(path.join(shots, "scan.png"), Buffer.from(scanShot.data, "base64"));

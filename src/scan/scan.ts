@@ -62,12 +62,44 @@ function openOptions(event?: Event): void {
 document.querySelector("#options-link")?.addEventListener("click", openOptions);
 document.querySelector("#open-options")?.addEventListener("click", openOptions);
 
+function widgetFrame(): HTMLIFrameElement | null {
+  const frame = moduleEl?.querySelector("#FaceAge-module-iframe");
+  return frame instanceof HTMLIFrameElement ? frame : null;
+}
+
+/** Parent styles do not apply inside the widget frame, so copy the body rule across. */
+function pinWidgetBody(frame: HTMLIFrameElement): void {
+  const doc = frame.contentDocument;
+  if (!doc?.head || doc.getElementById("shelf-widget-body-style")) return;
+  let css = "#faceAge-module-body{height:760px !important;position:relative}";
+  for (const sheet of document.styleSheets) {
+    let rules: CSSRuleList;
+    try {
+      rules = sheet.cssRules;
+    } catch {
+      continue;
+    }
+    for (const rule of rules) {
+      if (rule instanceof CSSStyleRule && rule.selectorText === "#faceAge-module-body") {
+        css = rule.cssText;
+      }
+    }
+  }
+  const style = doc.createElement("style");
+  style.id = "shelf-widget-body-style";
+  style.textContent = css;
+  doc.head.appendChild(style);
+}
+
 function watchUntilMounted(): void {
   const timer = window.setInterval(() => {
+    const frame = widgetFrame();
+    const doc = frame?.contentDocument;
+    if (frame) pinWidgetBody(frame);
     const mounted =
-      moduleEl?.querySelector(".face_age, .getStartedBtn") ||
-      document.getElementById("face-age-css") ||
-      document.getElementById("faceAge-module-body");
+      doc?.querySelector(".face_age, .getStartedBtn") ||
+      doc?.getElementById("face-age-css") ||
+      doc?.getElementById("faceAge-module-body");
     if (!mounted) return;
     window.clearInterval(timer);
     setStatus("ready", "Scanner is ready. Use the camera or upload a photo inside the panel.");
@@ -161,7 +193,10 @@ async function boot(): Promise<void> {
 }
 
 function showMissingClientId(): void {
-  setStatus("needs-client-id", "Add a Face Age Client ID in the extension settings before scanning.");
+  setStatus(
+    "needs-client-id",
+    "Add a Face Age Client ID in the extension settings before scanning.",
+  );
   if (setupCopy) setupCopy.textContent = SETUP_MESSAGE;
   if (missingEl) missingEl.hidden = false;
   if (moduleEl) moduleEl.hidden = true;

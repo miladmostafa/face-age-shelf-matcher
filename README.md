@@ -112,7 +112,7 @@ npm run build
 
 `npm test` runs Vitest on profile building, keyword matching, domain parsing, product-card badging, the Client ID setup rules, and the SDK patch.
 
-`npm run check:widget` loads `dist/` in Chrome for Testing, saves a Client ID from `FACEAGE_CLIENT_ID` or `.env.local`, and drives the scan page. Copy `.env.example` to `.env.local`. Do not commit a Client ID. The local fixture capture used by that check is written outside this repository so it does not replace `docs/screenshots/store.png`.
+`npm run check:widget` loads `dist/` in Chrome for Testing, saves a Client ID from `FACEAGE_CLIENT_ID` or `.env.local`, and drives the scan page through a sample photo. The check uses software WebGL. MediaPipe waits on a GL sync, and a Chrome launch with the GPU disabled never finishes that wait. Copy `.env.example` to `.env.local`. Do not commit a Client ID. The local fixture capture used by that check is written outside this repository so it does not replace `docs/screenshots/store.png`.
 
 English terms are the main dictionary. Persian (`fa`) terms are included so another language is a data change. Add a language by putting a string array on `terms` in `src/lib/dictionary.ts`.
 
@@ -125,10 +125,10 @@ The scanner is the extension page `src/scan/scan.html`. `#FaceAge-module` is in 
 The published build does not fit a normal extension page as shipped. `script-src` is `'self'` plus `'wasm-unsafe-eval'` (MediaPipe compiles WebAssembly). Remote scripts, inline scripts, and `eval` are not allowed. `scripts/patch-faceage.mjs` changes the bundle so it stays inside that policy:
 
 - Chart.js, Swiper, and MediaPipe Face Mesh (`@mediapipe/face_mesh` 0.3.1620248508) are copied into the extension. The SDK loads them from `/vendor/` instead of a CDN. The MediaPipe script tag no longer sets `crossorigin="anonymous"`, which extension files cannot satisfy.
-- The radar chart and Swiper carousels were inline scripts. The patch calls `Chart` and `Swiper` directly.
+- The radar chart and Swiper carousels were inline scripts inside the widget frame. The patch calls `Chart` and `Swiper` on that frame’s window instead.
 - Webpack’s `new Function("return this")` fallback, and MediaPipe’s embind `new Function` helper, are replaced with ordinary functions.
 - Webpack chunk loading only treated `http(s)` URLs as a script base. The patch also accepts `chrome-extension:` so the chunks packaged next to `faceage.js` load.
-- The widget created a blank iframe and wrote its UI into that frame. The patch mounts the same UI in `[data-faceage-root]` inside `#FaceAge-module`.
+- The widget still creates its own iframe, `#FaceAge-module-iframe`, with no `src`. The document is `about:blank`, and the SDK writes the scanner into it. It is not a remote page, a blob URL, or `srcdoc`, so the extension policy does not need a `frame-src` change. `#FaceAge-module` on the scan page is only the host. The extension does not add a second sandbox frame. Parent CSS does not apply inside the frame, so the scan page copies the `#faceAge-module-body` rule into the frame document.
 
 Stylesheets are not scripts. Face Age CSS still comes from `static.getfaceage.com`, and the UI fonts still come from Google Fonts. Swiper’s CSS is packaged.
 

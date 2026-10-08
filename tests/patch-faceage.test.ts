@@ -7,8 +7,11 @@ import {
   TEXT_REPLACEMENTS,
 } from "../scripts/patch-faceage.mjs";
 
+const IFRAME_CREATE = 'i.dom.elIframe=document.createElement("iframe")';
+
 const FIXTURE = [
   ...TEXT_REPLACEMENTS.map(([from]) => from),
+  IFRAME_CREATE,
   `${CHART_START}IGNORED${CHART_END}`,
 ].join("\n");
 
@@ -23,14 +26,14 @@ describe("patchFaceAgeBundle", () => {
     expect(patched).toContain("/vendor/swiper/swiper-bundle.min.css");
     expect(patched).toContain("/vendor/mediapipe/");
     expect(patched).toContain("/^(https?:|chrome-extension:)/");
-    expect(patched).toContain('querySelector("#FaceAge-module [data-faceage-root]")');
-    expect(patched).toContain("contentDocument");
-    expect(patched).toContain('typeof Swiper=="function"&&new Swiper');
-    expect(patched).toContain('typeof Chart==="function"');
+    expect(patched).toContain(IFRAME_CREATE);
+    expect(patched).toContain("frame.contentDocument");
+    expect(patched).toContain("view.Swiper");
+    expect(patched).toContain("view.Chart");
     expect(patched).not.toContain("https://cdn.jsdelivr.net");
     expect(patched).not.toContain("new Function");
     expect(patched).not.toContain('setAttribute("crossorigin","anonymous")');
-    expect(patched).not.toContain('elIframe=document.createElement("iframe")');
+    expect(patched).not.toContain("data-faceage-root");
     expect(patched).not.toContain(".text=");
     expect(patched).toContain("position: relative; z-index: 1; opacity: 1;");
   });

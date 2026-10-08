@@ -73,15 +73,19 @@ aside {
   min-height: 760px;
   background: white;
 }
+#FaceAge-module-iframe {
+  display: block;
+  width: 100%;
+  min-height: 760px;
+  border: 0;
+  background: white;
+}
 #faceAge-module-body {
   height: 760px !important;
   position: relative;
 }
 #FaceAge-module[hidden] {
   display: none;
-}
-[data-faceage-root] {
-  min-height: 720px;
 }
 #missing {
   padding: 1.5rem 1.2rem 2rem;
@@ -114,7 +118,7 @@ aside h2 {
     grid-template-columns: 1fr;
   }
   #FaceAge-module,
-  [data-faceage-root] {
+  #FaceAge-module-iframe {
     min-height: 640px;
   }
 }
