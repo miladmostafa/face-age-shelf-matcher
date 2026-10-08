@@ -11,6 +11,14 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dist = path.join(root, "dist");
+const builtManifest = JSON.parse(readFileSync(path.join(dist, "manifest.json"), "utf8"));
+const extensionPolicy = builtManifest.content_security_policy?.extension_pages || "";
+if (!extensionPolicy.includes("'wasm-unsafe-eval'")) {
+  console.error(
+    `Built dist/manifest.json is missing 'wasm-unsafe-eval'. extension_pages: ${extensionPolicy || "(absent)"}`,
+  );
+  process.exit(1);
+}
 const chromePath = process.env.CHROME_PATH || "/tmp/cft/chrome-linux64/chrome";
 const port = 9355;
 const storePort = 8765;
@@ -374,6 +382,22 @@ console.log(`Widget resources: ${scrub(JSON.stringify(widget.resources), secret)
 if (!`${widget.text}`.toLowerCase().includes("get started")) {
   fail("The widget mounted, but the scanner start screen was not detected.");
 }
+const frameWasm = await evaluate(
+  scan.sessionId,
+  `(() => {
+    const frame = document.querySelector("#FaceAge-module-iframe");
+    if (!frame || !frame.contentWindow) return "missing-frame";
+    const bytes = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]);
+    return frame.contentWindow.WebAssembly.instantiate(bytes).then(
+      () => "allowed",
+      (error) => String(error && error.message || error),
+    );
+  })()`,
+);
+if (frameWasm !== "allowed") {
+  fail(`SDK iframe blocked WebAssembly: ${frameWasm}`);
+}
+console.log("SDK iframe can compile WebAssembly.");
 
 await evaluate(
   scan.sessionId,

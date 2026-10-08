@@ -68,9 +68,12 @@ npm run build
 
 1. Open `chrome://extensions`.
 2. Turn on **Developer mode**.
-3. Choose **Load unpacked** and select the `dist` folder.
-4. Open the extension’s options, paste your Client ID, and save.
-5. Open the scanner from the popup or the options page.
+3. Choose **Load unpacked** and select the `dist` folder inside this repo. Do not select the repository root.
+4. After every `npm run build`, click **Reload** on that extension card. An older unpacked copy keeps its previous manifest.
+5. Open the extension’s options, paste your Client ID, and save.
+6. Open the scanner from the popup or the options page.
+
+MediaPipe compiles WebAssembly on the scan page. The built `dist/manifest.json` has to include `content_security_policy.extension_pages` set to `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'`. Without `'wasm-unsafe-eval'`, face mesh fails and the console quotes `script-src 'self'`. Firefox 128 and newer uses that same policy. `npm run dev` writes a development copy into `dist/` as well; test the scanner from a fresh `npm run build` unless you are actively using the dev server.
 
 ### Firefox
 
@@ -128,7 +131,7 @@ The published build does not fit a normal extension page as shipped. `script-src
 - The radar chart and Swiper carousels were inline scripts inside the widget frame. The patch calls `Chart` and `Swiper` on that frame’s window instead.
 - Webpack’s `new Function("return this")` fallback, and MediaPipe’s embind `new Function` helper, are replaced with ordinary functions.
 - Webpack chunk loading only treated `http(s)` URLs as a script base. The patch also accepts `chrome-extension:` so the chunks packaged next to `faceage.js` load.
-- The widget still creates its own iframe, `#FaceAge-module-iframe`, with no `src`. The document is `about:blank`, and the SDK writes the scanner into it. It is not a remote page, a blob URL, or `srcdoc`, so the extension policy does not need a `frame-src` change. `#FaceAge-module` on the scan page is only the host. The extension does not add a second sandbox frame. Parent CSS does not apply inside the frame, so the scan page copies the `#faceAge-module-body` rule into the frame document.
+- The widget still creates its own iframe, `#FaceAge-module-iframe`, with no `src`. The document is `about:blank`, and the SDK writes the scanner into it. It is not a remote page, a blob URL, or `srcdoc`, so the extension policy does not need a `frame-src` change. `#FaceAge-module` on the scan page is only the host. The extension does not add a second sandbox frame. Parent CSS does not apply inside the frame, so the scan page copies the `#faceAge-module-body` rule into the frame document. MediaPipe’s solution scripts are inserted into the extension page, and the frame compiles WebAssembly with that page’s `WebAssembly` object, because an `about:blank` frame can otherwise keep the default `script-src 'self'` policy.
 
 Stylesheets are not scripts. Face Age CSS still comes from `static.getfaceage.com`, and the UI fonts still come from Google Fonts. Swiper’s CSS is packaged.
 

@@ -36,6 +36,7 @@ describe("patchFaceAgeBundle", () => {
     expect(patched).not.toContain("data-faceage-root");
     expect(patched).not.toContain(".text=");
     expect(patched).toContain("position: relative; z-index: 1; opacity: 1;");
+    expect(patched).toContain("(window.top||window).document.body.appendChild(t)");
   });
 });
 

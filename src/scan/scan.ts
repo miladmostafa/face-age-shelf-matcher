@@ -67,6 +67,28 @@ function widgetFrame(): HTMLIFrameElement | null {
   return frame instanceof HTMLIFrameElement ? frame : null;
 }
 
+/**
+ * The SDK frame is about:blank. Some browsers give that document the default
+ * extension policy, script-src 'self', and then WebAssembly.instantiate throws.
+ * The extension page policy includes wasm-unsafe-eval, so compile with that page's
+ * WebAssembly instead of the frame's.
+ */
+function shareExtensionWasm(frame: HTMLIFrameElement): void {
+  try {
+    const view = frame.contentWindow as (Window & { WebAssembly: typeof WebAssembly }) | null;
+    if (!view) return;
+    const pageWasm = WebAssembly;
+    const frameWasm = view.WebAssembly;
+    if (frameWasm.instantiate === pageWasm.instantiate) return;
+    frameWasm.instantiate = pageWasm.instantiate.bind(pageWasm);
+    frameWasm.instantiateStreaming = pageWasm.instantiateStreaming.bind(pageWasm);
+    frameWasm.compile = pageWasm.compile.bind(pageWasm);
+    frameWasm.compileStreaming = pageWasm.compileStreaming.bind(pageWasm);
+  } catch {
+    // The frame document is not readable until it finishes navigating.
+  }
+}
+
 /** Parent styles do not apply inside the widget frame, so copy the body rule across. */
 function pinWidgetBody(frame: HTMLIFrameElement): void {
   const doc = frame.contentDocument;
@@ -95,7 +117,10 @@ function watchUntilMounted(): void {
   const timer = window.setInterval(() => {
     const frame = widgetFrame();
     const doc = frame?.contentDocument;
-    if (frame) pinWidgetBody(frame);
+    if (frame) {
+      shareExtensionWasm(frame);
+      pinWidgetBody(frame);
+    }
     const mounted =
       doc?.querySelector(".face_age, .getStartedBtn") ||
       doc?.getElementById("face-age-css") ||
@@ -141,6 +166,11 @@ function start(clientId: string): void {
   if (missingEl) missingEl.hidden = true;
   moduleEl.hidden = false;
   setStatus("starting", "Starting the Face Age scanner…");
+  const frameObserver = new MutationObserver(() => {
+    const frame = widgetFrame();
+    if (frame) shareExtensionWasm(frame);
+  });
+  frameObserver.observe(moduleEl, { childList: true, subtree: true });
   try {
     const widget = new FaceAge({
       elementId: "FaceAge-module",

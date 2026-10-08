@@ -3,7 +3,8 @@
  * page: local scripts only, no inline scripts, and no eval.
  * Chart.js, Swiper, and MediaPipe Face Mesh are loaded from the extension
  * package. The widget keeps its own about:blank iframe (#FaceAge-module-iframe)
- * and writes the scanner UI into that frame.
+ * and writes the scanner UI into that frame. MediaPipe scripts are added to the
+ * top extension page so they compile under that page's wasm-unsafe-eval policy.
  */
 
 const MEDIAPIPE_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.3/";
@@ -37,7 +38,7 @@ const TEXT_REPLACEMENTS = [
   ['new Function("return this")', "window"],
   [
     't.setAttribute("src",e),t.setAttribute("crossorigin","anonymous"),document.body.appendChild(t)',
-    't.setAttribute("src",e),document.body.appendChild(t)',
+    't.setAttribute("src",e),(window.top||window).document.body.appendChild(t)',
   ],
   ["position: relative; z-index: 1; opacity: 0;", "position: relative; z-index: 1; opacity: 1;"],
   [
