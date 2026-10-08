@@ -73,6 +73,10 @@ aside {
   min-height: 760px;
   background: white;
 }
+#faceAge-module-body {
+  height: 760px !important;
+  position: relative;
+}
 #FaceAge-module[hidden] {
   display: none;
 }
