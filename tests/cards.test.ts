@@ -106,6 +106,44 @@ describe("product cards", () => {
     const acne: ScanProfile = { ...PROFILE, problems: ["acne", "redness"] };
     expect(applyProfile(document, acne)).toBe(2);
   });
+
+  it("badges storefronts that do not use a heading for the product name", () => {
+    document.body.innerHTML = `
+      <div class="product-grid-item">
+        <div class="product-tile">
+          <h2 class="pdp-link">Salicylic Acid 2% Solution</h2>
+        </div>
+      </div>
+      <div class="product-tile">
+        <h5>Space NK</h5>
+        <div class="pdp-link"><a href="/cleanser">Salicylic Acid Cleanser</a></div>
+      </div>
+      <div class="ProductCard">
+        <div class="pal-c-ProductCard">
+          <div class="pal-c-ProductCardBody--title"><p>Brightening Serum</p></div>
+        </div>
+      </div>
+      <div class="product-cell">
+        <div itemprop="name" class="product-title">Hydrating Shea Butter</div>
+      </div>
+      <div class="lister-tile-container">
+        <div class="lister-tile"><div class="product-title">Minimize Pores Serum</div></div>
+      </div>
+    `;
+    const cards = findProductCards(document);
+    expect(cards.map((card) => card.className)).toEqual([
+      "product-grid-item",
+      "product-tile",
+      "ProductCard",
+      "product-cell",
+      "lister-tile-container",
+    ]);
+    const broad: ScanProfile = {
+      ...PROFILE,
+      problems: ["acne", "dullness", "dryness", "pores"],
+    };
+    expect(applyProfile(document, broad)).toBe(5);
+  });
 });
 
 function readTitle(card: HTMLElement): string {

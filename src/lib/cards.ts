@@ -10,10 +10,12 @@ const CARD_SELECTOR = [
   ".product-item",
   ".product-grid-item",
   ".card-wrapper",
+  ".product-cell",
   "[class*='product-card' i]",
   "[class*='product-tile' i]",
   "[class*='productcard' i]",
   "[class*='producttile' i]",
+  "[class*='lister-tile']",
   "[class*='__itemContainer']",
   "[data-testid*='product-card' i]",
   "[data-testid*='product-tile' i]",
@@ -25,6 +27,8 @@ const SPECIFIC_TITLE_SELECTOR = [
   "[class*='product-title' i]",
   "[class*='productname' i]",
   "[class*='card__title' i]",
+  "[class*='pdp-link' i]",
+  "[class*='ProductCardBody--title' i]",
   "[class*='__itemTitle']",
   "[itemprop='name']",
   "[data-testid*='product-name' i]",
@@ -87,7 +91,8 @@ function titleCount(card: HTMLElement): number {
  * Product cards that name a single product.
  * Image links and skeleton tiles often match the card selector and sit inside
  * the real card. Those fragments have no title, so they do not hide the card.
- * A grid is skipped when it contains another titled card.
+ * A grid is skipped when it contains another product with a different title.
+ * Nested chrome that repeats the same title stays inside the outer card.
  */
 export function findProductCards(root: ParentNode): HTMLElement[] {
   const matches = Array.from(root.querySelectorAll(CARD_SELECTOR)).filter(
@@ -96,13 +101,24 @@ export function findProductCards(root: ParentNode): HTMLElement[] {
   const titles = new Map<HTMLElement, string>();
   for (const card of matches) titles.set(card, readCardCopy(card).title);
 
+  const isGrid = (card: HTMLElement): boolean => {
+    const own = titles.get(card) ?? "";
+    return matches.some((other) => {
+      const title = titles.get(other) ?? "";
+      return other !== card && card.contains(other) && title.length >= 3 && title !== own;
+    });
+  };
+
   return matches.filter((card) => {
     if (card.closest(".ssm-host")) return false;
     const title = titles.get(card) ?? "";
     if (title.length < 3) return false;
-    if (titleCount(card) > 3) return false;
-    return !matches.some(
-      (other) => other !== card && card.contains(other) && (titles.get(other)?.length ?? 0) >= 3,
+    if (titleCount(card) > 6) return false;
+    if (isGrid(card)) return false;
+    const coveredByOuterCard = matches.some(
+      (other) =>
+        other !== card && other.contains(card) && titles.get(other) === title && !isGrid(other),
     );
+    return !coveredByOuterCard;
   });
 }
