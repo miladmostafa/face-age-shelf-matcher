@@ -9,10 +9,23 @@ import {
 
 const IFRAME_CREATE = 'i.dom.elIframe=document.createElement("iframe")';
 
+const SWIPER_211 = [
+  'var f=document.createElement("script");f.type="text/javascript",f.text="new Swiper(\'.myProductProblem\', {\\n            slidesPerView: \'auto\',\\n            spaceBetween: 6,\\n"+_k+"        });",n.dom.elRoutines.routine.appendChild(f)',
+  'var r=document.createElement("script");r.type="text/javascript",r.text="new Swiper(\'.myProductProblem\', {\\n            slidesPerView: \'auto\',\\n            spaceBetween: 6,\\n"+_k+"        });",n.dom.elRecommendation.products.appendChild(r)',
+  'var l=document.createElement("script");l.type="text/javascript",l.text="new Swiper(\'."+(this.recommendation?"myProducts":"mySwiper")+"\', {\\n            slidesPerView: \'auto\',\\n            spaceBetween: 12,\\n"+_k+\'            navigation: {\\n               nextEl: ".swiper-button-next",\\n               prevEl: ".swiper-button-prev",\\n            },\\n        });\',t.appendChild(l)',
+].join("\n");
+
+const SWIPER_213 = [
+  'var h=document.createElement("script");h.type="text/javascript",h.text="new Swiper(\'.myProductProblem\', {\\n            slidesPerView: \'auto\',\\n            spaceBetween: 6,\\n"+bk+"        });",n.dom.elRoutines.routine.appendChild(h)',
+  'var r=document.createElement("script");r.type="text/javascript",r.text="new Swiper(\'.myProductProblem\', {\\n            slidesPerView: \'auto\',\\n            spaceBetween: 6,\\n"+bk+"        });",n.dom.elRecommendation.products.appendChild(r)',
+  'var l=document.createElement("script");l.type="text/javascript",l.text="new Swiper(\'."+(this.recommendation?"myProducts":"mySwiper")+"\', {\\n            slidesPerView: \'auto\',\\n            spaceBetween: 12,\\n"+bk+\'            navigation: {\\n               nextEl: ".swiper-button-next",\\n               prevEl: ".swiper-button-prev",\\n            },\\n        });\',t.appendChild(l)',
+].join("\n");
+
 const FIXTURE = [
   ...TEXT_REPLACEMENTS.map(([from]) => from),
   IFRAME_CREATE,
   `${CHART_START}IGNORED${CHART_END}`,
+  SWIPER_213,
 ].join("\n");
 
 const WASM_FIXTURE =
@@ -37,6 +50,19 @@ describe("patchFaceAgeBundle", () => {
     expect(patched).not.toContain(".text=");
     expect(patched).toContain("position: relative; z-index: 1; opacity: 1;");
     expect(patched).toContain("(window.top||window).document.body.appendChild(t)");
+  });
+
+  it("rewrites the 2.4.11 Swiper variable names the same way", () => {
+    const patched = patchFaceAgeBundle(
+      [
+        ...TEXT_REPLACEMENTS.map(([from]) => from),
+        IFRAME_CREATE,
+        `${CHART_START}IGNORED${CHART_END}`,
+        SWIPER_211,
+      ].join("\n"),
+    );
+    expect(patched).toContain("view.Swiper");
+    expect(patched).not.toContain(".text=");
   });
 });
 

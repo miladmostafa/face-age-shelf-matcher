@@ -140,7 +140,7 @@ English terms are the main dictionary. Persian (`fa`) terms are included so anot
 
 ### Running the face-age SDK on an extension page
 
-Install [`face-age@latest`](https://www.npmjs.com/package/face-age) before `npm run build`, as described under Installation, so the packaged scanner is the newest release. These notes were checked against face-age 2.4.11. That release is a browser widget. `new FaceAge(options).render()` needs a DOM, a camera or an upload, a network connection, and a Client ID. MediaPipe Face Mesh runs in the page for face and pose checks, then the photo is uploaded to the Face Age API. The published package is minified. `package.json` points `types` at `dist/FaceAge.d.ts`, but that file is not in the tarball, so this repo has a small hand-written declaration in `src/types/face-age.d.ts`.
+Install [`face-age@latest`](https://www.npmjs.com/package/face-age) before `npm run build`, as described under Installation, so the packaged scanner is the newest release. These notes were checked against face-age 2.4.13. That release is a browser widget. `new FaceAge(options).render()` needs a DOM, a camera or an upload, a network connection, and a Client ID. MediaPipe Face Mesh runs in the page for face and pose checks, then the photo is uploaded to the Face Age API. The published package is minified. `package.json` points `types` at `dist/FaceAge.d.ts`, but that file is not in the tarball, so this repo has a small hand-written declaration in `src/types/face-age.d.ts`.
 
 The scanner is the extension page `src/scan/scan.html`. `#FaceAge-module` is in that markup, and the SDK renders into it there.
 
@@ -199,7 +199,7 @@ Third-party pieces used at runtime:
 
 | Piece                                                                      | Version        | License    | How it is loaded                        |
 | -------------------------------------------------------------------------- | -------------- | ---------- | --------------------------------------- |
-| [face-age](https://www.npmjs.com/package/face-age)                         | 2.4.11         | MIT        | Packaged from npm, with the patch above |
+| [face-age](https://www.npmjs.com/package/face-age)                         | 2.4.13         | MIT        | Packaged from npm, with the patch above |
 | [chart.js](https://www.npmjs.com/package/chart.js)                         | 4.4.6          | MIT        | Packaged                                |
 | [swiper](https://www.npmjs.com/package/swiper)                             | 11.2.10        | MIT        | Packaged                                |
 | [@mediapipe/face_mesh](https://www.npmjs.com/package/@mediapipe/face_mesh) | 0.3.1620248508 | Apache-2.0 | Packaged                                |

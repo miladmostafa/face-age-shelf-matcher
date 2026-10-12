@@ -61,4 +61,56 @@ describe("product cards", () => {
     expect(applyProfile(document, null)).toBe(0);
     expect(document.querySelector(".ssm-host")).toBeNull();
   });
+
+  it("keeps a product card when a nested image link also matches", () => {
+    document.body.innerHTML = `
+      <product-card-wrapper class="product-card">
+        <a class="product-item" href="/p/serum"><img alt="" /></a>
+        <a class="product-item-title" href="/p/serum">Salicylic Acid 2% Solution</a>
+      </product-card-wrapper>
+      <article class="pi" itemscope itemtype="http://schema.org/Product">
+        <meta itemprop="name" content="Milky Jelly Cleanser" />
+        <div class="ir ir--product-card"></div>
+        <h3 class="pi__title">Hydrating cleanser</h3>
+      </article>
+    `;
+    const cards = findProductCards(document);
+    expect(cards).toHaveLength(2);
+    expect(cards[0]?.classList.contains("product-card")).toBe(true);
+    expect(cards[1]?.tagName).toBe("ARTICLE");
+    const acne: ScanProfile = { ...PROFILE, problems: ["acne", "dryness"] };
+    expect(applyProfile(document, acne)).toBe(2);
+  });
+
+  it("reads a concern subtitle and shopify or grid titles", () => {
+    document.body.innerHTML = `
+      <div class="product-tile">
+        <h2 class="pdp-link">Sulfur Powder</h2>
+        <h3 class="title-descriptor">Treats Acne, Soothes Redness</h3>
+      </div>
+      <div class="card-wrapper">
+        <div class="js-pills" data-product-id="1">In your recipe</div>
+        <h3 class="card__title"><a href="/products/redness">Azelaic Acid Serum</a></h3>
+        <p class="card__heading">Clinically proven to minimise redness.</p>
+      </div>
+      <a class="list__itemContainer" href="/cream">
+        <div class="list__itemTitle">Relief Cream</div>
+      </a>
+    `;
+    const cards = findProductCards(document);
+    expect(cards.map((card) => readTitle(card))).toEqual([
+      "Sulfur Powder",
+      "Azelaic Acid Serum",
+      "Relief Cream",
+    ]);
+    const acne: ScanProfile = { ...PROFILE, problems: ["acne", "redness"] };
+    expect(applyProfile(document, acne)).toBe(2);
+  });
 });
+
+function readTitle(card: HTMLElement): string {
+  const title = card.querySelector(
+    ".product-item-title, .pdp-link, .card__title, [class*='itemTitle']",
+  );
+  return title?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+}

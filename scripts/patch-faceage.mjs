@@ -41,19 +41,47 @@ const TEXT_REPLACEMENTS = [
     't.setAttribute("src",e),(window.top||window).document.body.appendChild(t)',
   ],
   ["position: relative; z-index: 1; opacity: 0;", "position: relative; z-index: 1; opacity: 1;"],
-  [
-    'var f=document.createElement("script");f.type="text/javascript",f.text="new Swiper(\'.myProductProblem\', {\\n            slidesPerView: \'auto\',\\n            spaceBetween: 6,\\n"+_k+"        });",n.dom.elRoutines.routine.appendChild(f)',
-    swiperInFrame("n", '".myProductProblem"', SWIPER_OPTIONS),
-  ],
-  [
-    'var r=document.createElement("script");r.type="text/javascript",r.text="new Swiper(\'.myProductProblem\', {\\n            slidesPerView: \'auto\',\\n            spaceBetween: 6,\\n"+_k+"        });",n.dom.elRecommendation.products.appendChild(r)',
-    swiperInFrame("n", '".myProductProblem"', SWIPER_OPTIONS),
-  ],
-  [
-    'var l=document.createElement("script");l.type="text/javascript",l.text="new Swiper(\'."+(this.recommendation?"myProducts":"mySwiper")+"\', {\\n            slidesPerView: \'auto\',\\n            spaceBetween: 12,\\n"+_k+\'            navigation: {\\n               nextEl: ".swiper-button-next",\\n               prevEl: ".swiper-button-prev",\\n            },\\n        });\',t.appendChild(l)',
-    swiperInFrame("n", '"."+(this.recommendation?"myProducts":"mySwiper")', SWIPER_OPTIONS_WIDE),
-  ],
 ];
+
+const IDENT = String.raw`[A-Za-z_$][\w$]*`;
+
+/** Inline Swiper bootstraps. Minified local names differ between face-age releases. */
+const SWIPER_INLINE = [
+  {
+    label: "routine carousel",
+    pattern: new RegExp(
+      String.raw`var ${IDENT}=document\.createElement\("script"\);${IDENT}\.type="text\/javascript",${IDENT}\.text="new Swiper\('\.myProductProblem', \{\\n            slidesPerView: 'auto',\\n            spaceBetween: 6,\\n"\+${IDENT}\+"        \}\);",(${IDENT})\.dom\.elRoutines\.routine\.appendChild\(${IDENT}\)`,
+    ),
+    replace: (host) => swiperInFrame(host, '".myProductProblem"', SWIPER_OPTIONS),
+  },
+  {
+    label: "recommendation carousel",
+    pattern: new RegExp(
+      String.raw`var ${IDENT}=document\.createElement\("script"\);${IDENT}\.type="text\/javascript",${IDENT}\.text="new Swiper\('\.myProductProblem', \{\\n            slidesPerView: 'auto',\\n            spaceBetween: 6,\\n"\+${IDENT}\+"        \}\);",(${IDENT})\.dom\.elRecommendation\.products\.appendChild\(${IDENT}\)`,
+    ),
+    replace: (host) => swiperInFrame(host, '".myProductProblem"', SWIPER_OPTIONS),
+  },
+  {
+    label: "analysis carousel",
+    pattern: new RegExp(
+      String.raw`var ${IDENT}=document\.createElement\("script"\);${IDENT}\.type="text\/javascript",${IDENT}\.text="new Swiper\('\."\+\(this\.recommendation\?"myProducts":"mySwiper"\)\+"', \{\\n            slidesPerView: 'auto',\\n            spaceBetween: 12,\\n"\+${IDENT}\+'            navigation: \{\\n               nextEl: "\.swiper-button-next",\\n               prevEl: "\.swiper-button-prev",\\n            \},\\n        \}\);',${IDENT}\.appendChild\(${IDENT}\)`,
+    ),
+    // The carousel is built on a child view whose `gl` host is the minified name `n` in 2.4.x.
+    replace: () =>
+      swiperInFrame("n", '"."+(this.recommendation?"myProducts":"mySwiper")', SWIPER_OPTIONS_WIDE),
+  },
+];
+
+function replaceInlineSwipers(source) {
+  let next = source;
+  for (const item of SWIPER_INLINE) {
+    if (!item.pattern.test(next)) {
+      throw new Error(`face-age bundle is missing the inline ${item.label}.`);
+    }
+    next = next.replace(item.pattern, (_match, host) => item.replace(host));
+  }
+  return next;
+}
 
 const CREATE_NAMED_FUNCTION =
   'function createNamedFunction(name,body){name=makeLegalFunctionName(name);return new Function("body","return function "+name+"() {\\n"+\'    "use strict";\'+"    return body.apply(this, arguments);\\n"+"};\\n")(body)}';
@@ -79,6 +107,7 @@ export function patchFaceAgeBundle(source) {
     next = next.split(from).join(to);
   }
   next = replaceChartInline(next);
+  next = replaceInlineSwipers(next);
   if (next.includes("https://cdn.jsdelivr.net/npm/chart.js")) {
     throw new Error("Unpinned chart.js URL is still in the bundle.");
   }
@@ -152,4 +181,4 @@ export function patchMediaPipeWasm(source) {
   return next;
 }
 
-export { CHART_END, CHART_START, TEXT_REPLACEMENTS };
+export { CHART_END, CHART_START, SWIPER_INLINE, TEXT_REPLACEMENTS };

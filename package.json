@@ -33,7 +33,7 @@
   "dependencies": {
     "@mediapipe/face_mesh": "0.3.1620248508",
     "chart.js": "4.4.6",
-    "face-age": "2.4.11",
+    "face-age": "2.4.13",
     "swiper": "11.2.10"
   },
   "devDependencies": {
