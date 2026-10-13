@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scan · Skincare Shelf Matcher</title>
+    <link rel="stylesheet" href="./scan.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="mark" aria-hidden="true"></span>
+        <div>
+          <p class="eyebrow">Skincare Shelf Matcher</p>
+          <h1>Scan once. Shop with a label.</h1>
+        </div>
+      </div>
+      <a id="options-link" href="#">Options</a>
+    </header>
+    <p class="notice" role="note">
+      Photos are sent to the Face Age cloud for analysis and are not stored by this extension.
+      Product badges are keyword matches, not medical advice and not a product endorsement.
+    </p>
+    <main>
+      <section class="stage" aria-label="Face scanner">
+        <p id="status" data-state="loading">Loading scanner…</p>
+        <div id="missing" hidden>
+          <h2>Set your Client ID first</h2>
+          <p id="setup-copy"></p>
+          <p>
+            <a href="https://panel.getfaceage.com/" target="_blank" rel="noreferrer"
+              >Get a Client ID at panel.getfaceage.com</a
+            >
+          </p>
+          <button id="open-options" class="primary" type="button">Open settings</button>
+        </div>
+        <div id="FaceAge-module" hidden></div>
+      </section>
+      <aside>
+        <h2>Saved on this device</h2>
+        <div id="profile" class="muted">No scan yet.</div>
+        <div class="row">
+          <button id="rescan" class="quiet" type="button">Scan again</button>
+        </div>
+        <p class="fine">
+          After a scan, open a supported store. Product cards whose text mentions your saved
+          concerns get a “Matches your scan” badge.
+        </p>
+      </aside>
+    </main>
+    <script src="/vendor/faceage/faceage.js"></script>
+    <script type="module" src="./scan.ts"></script>
+  </body>
+</html>

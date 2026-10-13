@@ -1,0 +1,50 @@
+{
+  "name": "skincare-shelf-matcher",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome and Firefox skincare extension: one Face Age skin analysis, then product-match badges on beauty stores.",
+  "keywords": [
+    "skincare",
+    "browser-extension",
+    "chrome-extension",
+    "firefox-extension",
+    "skin-analysis",
+    "skin-age",
+    "face-age",
+    "product-matcher",
+    "manifest-v3"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "vendor": "node scripts/vendor-sdk.mjs",
+    "prebuild": "npm run vendor",
+    "build": "tsc --noEmit && vite build",
+    "predev": "npm run vendor",
+    "dev": "vite",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "check:widget": "node scripts/check-widget.mjs"
+  },
+  "dependencies": {
+    "@mediapipe/face_mesh": "0.3.1620248508",
+    "chart.js": "4.4.6",
+    "face-age": "2.4.13",
+    "swiper": "11.2.10"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^3.0.0",
+    "@types/chrome": "^0.1.1",
+    "eslint": "^9.36.0",
+    "happy-dom": "^18.0.1",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.44.0",
+    "vite": "^6.3.6",
+    "vitest": "^3.2.4"
+  }
+}
